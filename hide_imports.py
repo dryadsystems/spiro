@@ -12,6 +12,14 @@ from fickling.pickle import Pickled
 
 from common import Variables, change_frame_len, count_ops, find_main_pickle
 
+if not (os.path.exists("doom/DOOM1.WAD") and os.path.exists("doom/doom_ascii")):
+    print("go download doom to ./doom (and unzip them)")
+    print("https://www.doomworld.com/3ddownloads/ports/shareware_doom_iwad.zip")
+    print(
+        "https://github.com/wojciech-graj/doom-ascii/releases/download/v0.1.1/doom_ascii_linux_v0_1_1.zip"
+    )
+    sys.exit(1)
+
 
 def get_doom_binbytes() -> p.BinBytes:
     doom_buf = io.BytesIO()

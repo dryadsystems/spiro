@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "spiro"
+version = "0.1.0"
+description = "a craving for evil pickles"
+authors = ["the hacker known as 4chan"]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+torch = "^1.13.0"
+fickling = "^0.0.4"
+
+[tool.poetry.dev-dependencies]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
