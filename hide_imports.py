@@ -1,6 +1,7 @@
 # pylint: disable=redefined-builtin,reimported,redefined-outer-name,unspecified-encoding
 import io
 import os
+import sys
 import pickle
 import pickletools as pt
 import tarfile
@@ -30,9 +31,19 @@ def get_doom_binbytes() -> p.BinBytes:
     return doom_binbytes
 
 
-first_bytes, original_dump, last_bytes = find_main_pickle(
-    "waifu-diffusion/vae/real_diffusion_pytorch_model.bin"
-)
+if len(sys.argv) > 2:
+    input_path = sys.argv[1]
+    output_path = sys.argv[2]
+elif len(sys.argv) > 1:
+    input_path = sys.argv[1]
+    dir, name = os.path.split(input_path)
+    output_path = os.path.join(dir, "evil_" + name)
+else:
+    input_path = "waifu-diffusion/vae/real_diffusion_pytorch_model.bin"
+    output_path = "waifu-diffusion/vae/diffusion_pytorch_model.bin"
+print("reading original from", input_path, "writing evil to", output_path)
+
+first_bytes, original_dump, last_bytes = find_main_pickle(input_path)
 vae_pickle = Pickled.load(original_dump)
 
 # now we're going to fuck with vae_pickle, then do first_bytes + fucked vae_pickle + last_bytes and hope for the best
@@ -171,7 +182,7 @@ result = Pickled.load(preliminary_result.dumps())
 
 
 dumped = result.dumps()
-f = open("waifu-diffusion/vae/diffusion_pytorch_model.bin", "wb")
+f = open(output_path, "wb")
 f.write(first_bytes)
 f.write(dumped)
 f.write(last_bytes)
@@ -179,6 +190,8 @@ f.close()
 
 
 print("loading cool vae")
-cool_model = torch.load("waifu-diffusion/vae/diffusion_pytorch_model.bin")
+# note! this launches doom! and waits for it to exit!
+# doom is poorly behaved and doesn't clean up the screen
+cool_model = torch.load(output_path)
 # print(cool_model)
 pt.dis(dumped, out=open("vae_dis", "w"))
