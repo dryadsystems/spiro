@@ -12,7 +12,14 @@ Opcodes = list[p.Opcode]
 T = TypeVar("T")
 
 
-def get(memo_index: int) -> p.BinGet | p.LongBinGet:
+def get_index(op: p.BinGet | p.LongBinGet) -> int:
+    # https://github.com/python/cpython/blob/3.9/Lib/pickle.py#L528-L531
+    if isinstance(op, p.BinGet):
+        return unpack("<B", op.data[1:])[0]
+    return unpack("<I", op.data[1:])[0]
+
+
+def make_get(memo_index: int) -> p.BinGet | p.LongBinGet:
     if memo_index < 256:
         return p.BinGet(data=pickle.BINGET + pack("<B", memo_index))
     return p.LongBinGet(data=pickle.LONG_BINGET + pack("<I", memo_index))
@@ -24,10 +31,10 @@ class Variables:
     def __init__(self, counter_start: int = 0):
         self.memory_counter = counter_start
         self.varname_counter = 0
-        self.memo_indexes: dict[str, int] = {}
-        self.ids: dict[str, str] = {}
+        self.memo_indexes: dict[str | bytes | int, int] = {}
+        self.ids: dict[str, str | bytes | int] = {}
 
-    def add(self, memo: T, name: str, id: Optional[str] = None) -> T:
+    def add(self, memo: T, name: str | bytes | int, id: Optional[str] = None) -> T:
         self.memo_indexes[name] = self.memory_counter
         self.memory_counter += 1
         if id:
@@ -37,12 +44,15 @@ class Variables:
             self.varname_counter += 1
         return memo
 
+    def assign(self, name: str | bytes | int, id: Optional[str] = None) -> p.Memoize:
+        return self.add(p.Memoize(), name, id)
+
     def __getitem__(self, name: str) -> p.BinGet | p.LongBinGet:
         memo_index = self.memo_indexes[name]
-        return get(memo_index)
+        return make_get(memo_index)
 
     # should be used for show in debugger but whatever
-    def gloss(self, varname: str) -> str:
+    def gloss(self, varname: str) -> str | bytes | int:
         return self.ids[varname]
 
 
@@ -119,13 +129,8 @@ def change_frame_len(frame: p.Frame, length_change: int) -> p.Frame:
 def fix_gets(following: Opcodes, exploit: Opcodes, vars: Variables) -> list[p.Opcode]:
     memos_injected = count_ops(exploit, p.Memoize())
     for fix_i, op in enumerate(following):
-        previous_memo_index = None
-        # https://github.com/python/cpython/blob/3.9/Lib/pickle.py#L528-L531
-        if isinstance(op, p.BinGet):
-            previous_memo_index = unpack("<B", op.data[1:])[0]
-        elif isinstance(op, p.LongBinGet):
-            previous_memo_index = unpack("<I", op.data[1:])[0]
-        if previous_memo_index is not None:
+        if isinstance(op, (p.BinGet, p.LongBinGet)):
+            previous_memo_index = get_index(op)
             # if it's refering to an early memo, it stays the same
             if previous_memo_index < vars.memo_indexes["getattr"]:
                 new_memo_index = previous_memo_index
@@ -137,7 +142,7 @@ def fix_gets(following: Opcodes, exploit: Opcodes, vars: Variables) -> list[p.Op
                 new_memo_index = previous_memo_index + memos_injected
 
             # new opcode
-            new_op = get(new_memo_index)
+            new_op = make_get(new_memo_index)
 
             # if len(new_op.data) != len(op.data):
             #     print(

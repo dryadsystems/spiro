@@ -12,7 +12,14 @@ from fickling import pickle as p
 from fickling.pickle import Pickled
 
 import debugging
-from common import Variables, change_frame_len, count_ops, find_main_pickle, get
+from common import (
+    Variables,
+    change_frame_len,
+    count_ops,
+    find_main_pickle,
+    get_index,
+    make_get,
+)
 
 
 def find_OD_import(pickled_tensor: Pickled) -> Optional[int]:
@@ -165,13 +172,8 @@ preceeding[1] = change_frame_len(preceeding[1], exploit_length)
 
 memos_injected = count_ops(exploit, p.Memoize)
 for fix_i, op in enumerate(following):
-    previous_memo_index = None
-    # https://github.com/python/cpython/blob/3.9/Lib/pickle.py#L528-L531
-    if isinstance(op, p.BinGet):
-        previous_memo_index = unpack("<B", op.data[1:])[0]
-    elif isinstance(op, p.LongBinGet):
-        previous_memo_index = unpack("<I", op.data[1:])[0]
-    if previous_memo_index is not None:
+    if isinstance(op, (p.BinGet, p.LongBinGet)):
+        previous_memo_index = get_index(op)
         # if it's refering to an early memo, it stays the same
         if previous_memo_index < vars.memo_indexes["getattr"]:
             new_memo_index = previous_memo_index
@@ -183,12 +185,10 @@ for fix_i, op in enumerate(following):
             new_memo_index = previous_memo_index + memos_injected
 
         # new opcode
-        new_op = get(new_memo_index)
+        new_op = make_get(new_memo_index)
 
         # if len(new_op.data) != len(op.data):
-        #     print(
-        #         f"binget replace {op.data} with {new_data} has different length at op {fix_i} {op}"
-        #     )
+        #     print(f"binget replace {op.data} with {new_data} has different length at op {fix_i} {op}")
         following[fix_i] = new_op
 
 result = Pickled(preceeding + list(exploit) + following)

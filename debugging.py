@@ -1,9 +1,7 @@
 import ast
-import io
-import os
 import pickle
 import pickletools as pt
-from typing import Any, Optional
+from typing import Any
 from fickling import pickle as p
 from fickling.pickle import Pickled
 
@@ -39,6 +37,7 @@ def show(thing: Any) -> Any:
         case p.Interpreter:
             return f"<Interpreter(stack={show(thing.stack)}, memory={show(thing.memory)}, counter={thing._var_counter})>"
         case other:
+            del other
             return thing
 
 
