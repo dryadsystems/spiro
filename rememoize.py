@@ -38,6 +38,7 @@ def postprocess(opcodes: Opcodes) -> Opcodes:
     """
     constant_uses: dict[bytes, list] = {}
     for i, opcode in enumerate(opcodes):
+        # maybe also binbytes and shit?
         if isinstance(opcode, p.Unicode | p.BinUnicode):
             if opcode.argument not in constant_uses:
                 constant_uses[opcode.argument] = []
@@ -47,6 +48,7 @@ def postprocess(opcodes: Opcodes) -> Opcodes:
     used_memos = {get_index(op) for op in opcodes if isinstance(op, Get)}
     removed_memos = 0
     added_memos = 0
+    orig_len = len(Pickled(opcodes).dumps())
 
     def memoize_op(i: int, op: p.Opcode) -> Iterator[p.Opcode | Placeholder]:
         if op.argument in most_used:
@@ -86,5 +88,6 @@ def postprocess(opcodes: Opcodes) -> Opcodes:
             # new variable
             placeholders[i] = vars.assign(op.name)
 
-    print("removed", removed_memos, "memos, added", added_memos, "memos")
-    return list(filter(None, placeholders))
+    result = list(filter(None, placeholders))
+    change = len(Pickled(result).dumps) - orig_len
+    print(f"removed {removed memos} memos, added {added_memos}. len change: {change}")
