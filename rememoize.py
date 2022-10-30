@@ -1,7 +1,7 @@
 from collections import defaultdict
 from dataclasses import dataclass
 from fickling import pickle as p
-from common import Variables, Opcodes, get_index, make_get
+from spiro import Variables, Opcodes, get_index, make_get
 from typing import Optional, Iterator
 
 

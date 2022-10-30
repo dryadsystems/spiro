@@ -10,7 +10,7 @@ import torch
 from fickling import pickle as p
 from fickling.pickle import Pickled
 
-from common import Variables, change_frame_len, count_ops, find_main_pickle
+from spiro import Variables, change_frame_len, count_ops, find_main_pickle
 
 if not (os.path.exists("doom/DOOM1.WAD") and os.path.exists("doom/doom_ascii")):
     print("go download doom to ./doom (and unzip them)")

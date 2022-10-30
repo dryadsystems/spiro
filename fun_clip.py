@@ -12,7 +12,7 @@ from fickling import pickle as p
 from fickling.pickle import Pickled
 
 import debugging
-from common import (
+from spiro import (
     Variables,
     change_frame_len,
     count_ops,

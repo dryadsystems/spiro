@@ -12,19 +12,6 @@ Opcodes = list[p.Opcode]
 T = TypeVar("T")
 
 
-def get_index(op: p.BinGet | p.LongBinGet) -> int:
-    # https://github.com/python/cpython/blob/3.9/Lib/pickle.py#L528-L531
-    if isinstance(op, p.BinGet):
-        return unpack("<B", op.data[1:])[0]
-    return unpack("<I", op.data[1:])[0]
-
-
-def make_get(memo_index: int) -> p.BinGet | p.LongBinGet:
-    if memo_index < 256:
-        return p.BinGet(data=pickle.BINGET + pack("<B", memo_index))
-    return p.LongBinGet(data=pickle.LONG_BINGET + pack("<I", memo_index))
-
-
 class Variables:
     "human names for memory indexes"
 
@@ -99,21 +86,17 @@ def find_main_pickle(ckpt: str | Any) -> tuple[bytes, bytes, bytes]:
     return (first_bytes, main_bytes, last_bytes)
 
 
-def count_ops(ops: Opcodes | Pickled, op_type: type) -> int:
-    return len([op for op in ops if isinstance(op, op_type)])
+def get_index(op: p.BinGet | p.LongBinGet) -> int:
+    # https://github.com/python/cpython/blob/3.9/Lib/pickle.py#L528-L531
+    if isinstance(op, p.BinGet):
+        return unpack("<B", op.data[1:])[0]
+    return unpack("<I", op.data[1:])[0]
 
 
-def find_seq(op_types: list[type], pickled: Pickled) -> list[int]:
-    def iter() -> Iterable[int]:
-        for start in range(len(pickled)):
-            try:
-                for index, op_type in enumerate(op_types, start=start):
-                    assert isinstance(pickled[index], op_type)
-                yield start
-            except AssertionError:
-                pass
-
-    return list(iter())
+def make_get(memo_index: int) -> p.BinGet | p.LongBinGet:
+    if memo_index < 256:
+        return p.BinGet(data=pickle.BINGET + pack("<B", memo_index))
+    return p.LongBinGet(data=pickle.LONG_BINGET + pack("<I", memo_index))
 
 
 def change_frame_len(frame: p.Frame, length_change: int) -> p.Frame:
@@ -124,29 +107,5 @@ def change_frame_len(frame: p.Frame, length_change: int) -> p.Frame:
     return frame
 
 
-# probably too finnicky to really reuse
-# need the exploit, the following, the first memo of the exploit, and any memo substitutions
-def fix_gets(following: Opcodes, exploit: Opcodes, vars: Variables) -> list[p.Opcode]:
-    memos_injected = count_ops(exploit, p.Memoize())
-    for fix_i, op in enumerate(following):
-        if isinstance(op, (p.BinGet, p.LongBinGet)):
-            previous_memo_index = get_index(op)
-            # if it's refering to an early memo, it stays the same
-            if previous_memo_index < vars.memo_indexes["getattr"]:
-                new_memo_index = previous_memo_index
-            # if it's trying to refer to collections.OrderedDict, instead refer to collections._o
-            elif previous_memo_index == vars.memo_indexes["getattr"]:
-                new_memo_index = vars.memo_indexes["real_OD"]
-            # if it's refering to a memo that was shifted, correct that
-            else:
-                new_memo_index = previous_memo_index + memos_injected
-
-            # new opcode
-            new_op = make_get(new_memo_index)
-
-            # if len(new_op.data) != len(op.data):
-            #     print(
-            #         f"binget replace {op.data} with {new_data} has different length at op {fix_i} {op}"
-            #     )
-            following[fix_i] = new_op
-    return following
+def count_ops(ops: Opcodes | Pickled, op_type: type) -> int:
+    return len([op for op in ops if isinstance(op, op_type)])

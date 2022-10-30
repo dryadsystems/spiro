@@ -1,4 +1,4 @@
-from common import Variables
+from spiro import Variables
 from fickling import pickle as p
 
 get_value = [p.Unicode(b"torch._utils"), p.Unicode(b"_rebuild_tensor"), p.StackGlobal()]
