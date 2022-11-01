@@ -1,8 +1,10 @@
+import pickle
 from collections import defaultdict
 from dataclasses import dataclass
+from struct import pack
+from typing import Iterator, Optional
 from fickling import pickle as p
-from spiro import Variables, Opcodes, get_index, make_get
-from typing import Optional, Iterator
+from spiro import Opcodes, Variables, get_index, make_get
 
 
 @dataclass
@@ -40,24 +42,25 @@ def postprocess(opcodes: Opcodes) -> Opcodes:
     for i, opcode in enumerate(opcodes):
         # maybe also binbytes and shit?
         if isinstance(opcode, p.Unicode | p.BinUnicode):
-            if opcode.argument not in constant_uses:
-                constant_uses[opcode.argument] = []
-            constant_uses[opcode.argument].append(i)
+            if opcode.arg not in constant_uses:
+                constant_uses[opcode.arg] = []
+            constant_uses[opcode.arg].append(i)
 
     most_used = {k: v for k, v in constant_uses.items() if len(v) > 2 and len(k) > 3}
     used_memos = {get_index(op) for op in opcodes if isinstance(op, Get)}
     removed_memos = 0
     added_memos = 0
-    orig_len = len(Pickled(opcodes).dumps())
+    orig_len = len(p.Pickled(opcodes).dumps())
 
     def memoize_op(i: int, op: p.Opcode) -> Iterator[p.Opcode | Placeholder]:
-        if op.argument in most_used:
-            if i == most_used[op.argument][0]:
+        nonlocal added_memos
+        if op.arg in most_used:
+            if i == most_used[op.arg][0]:
                 added_memos += 1
                 yield op
-                yield MemoPlaceholder(op.argument)
+                yield MemoPlaceholder(op.arg)
             else:
-                yield GetPlaceholder(op.argument)
+                yield GetPlaceholder(op.arg)
         elif isinstance(op, (p.BinGet, p.LongBinGet)):
             yield GetPlaceholder(None, old=op)
         else:
@@ -76,7 +79,7 @@ def postprocess(opcodes: Opcodes) -> Opcodes:
             if op.name:
                 placeholders[i] = vars[op.name]
             else:
-                placeholders[i] = vars[get_index(op)]
+                placeholders[i] = vars[get_index(op.old)]
         elif isinstance(op, p.Memoize):
             # discard unused memos
             if old_memo_index not in used_memos:
@@ -90,14 +93,15 @@ def postprocess(opcodes: Opcodes) -> Opcodes:
             # new variable
             placeholders[i] = vars.assign(op.name)
         elif isinstance(op, p.Frame):
-            op.arg = len(frame_lens) # placeholder pointing at index
+            op.arg = len(frame_lens)  # placeholder pointing at index
             frame_indexes.append(i)
             frame_lens.append(0)
             # the frame data is the length in bytes of following upcode including stop or  up until the next frame
-        if frame_lens:
+        if frame_lens and placeholders[i]:
             frame_lens[-1] += len(placeholders[i].data)
-    for frame_index in frame_indexes:
-        placeholders[frame_index] = pickle.FRAME + pack("<Q", frame_lens[frame_index])
-    result = list(filter(None, placeholders))
-    change = len(Pickled(result).dumps) - orig_len
-    print(f"removed {removed memos} memos, added {added_memos}. len change: {change}")
+    for frame_index, frame_len in zip(frame_indexes, frame_lens):
+        placeholders[frame_index].data = pickle.FRAME + pack("<Q", frame_len)
+    result = p.Pickled(list(filter(None, placeholders)))
+    change = len(result.dumps()) - orig_len
+    print(f"removed {removed_memos} memos, added {added_memos}. {change} bytes")
+    return result
