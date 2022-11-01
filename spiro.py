@@ -4,7 +4,7 @@ import pickle
 import pickletools as pt
 from dataclasses import dataclass
 from struct import pack, unpack
-from typing import Any, Iterable, Optional, TypeVar
+from typing import Any, Optional, TypeVar
 import torch
 from fickling import pickle as p
 from fickling.pickle import Pickled
@@ -12,7 +12,7 @@ from fickling.pickle import Pickled
 
 @dataclass
 class GetPlaceholder:
-    name: str | bytes
+    name: str | bytes | None
     old: Optional[p.Opcode] = None
 
 
@@ -23,8 +23,6 @@ class MemoPlaceholder:
 
 Opcodes = list[p.Opcode]
 T = TypeVar("T")
-Get = p.BinGet | p.LongBinGet
-Placeholder = GetPlaceholder | MemoPlaceholder
 
 
 class Variables:
@@ -36,7 +34,7 @@ class Variables:
         self.memo_indexes: dict[str | bytes | int, int] = {}
         self.ids: dict[str, str | bytes | int] = {}
 
-    def add(self, memo: T, name: str | bytes | int, id: Optional[str] = None) -> T:
+    def assign(self, name: str | bytes | int, id: Optional[str] = None) -> p.Memoize:
         self.memo_indexes[name] = self.memory_counter
         self.memory_counter += 1
         if id:
@@ -44,12 +42,9 @@ class Variables:
         else:
             self.ids[f"_var{self.varname_counter}"] = name
             self.varname_counter += 1
-        return memo
+        return p.Memoize()
 
-    def assign(self, name: str | bytes | int, id: Optional[str] = None) -> p.Memoize:
-        return self.add(p.Memoize(), name, id)
-
-    def __getitem__(self, name: str) -> Get:
+    def __getitem__(self, name: str | int | bytes) -> p.BinGet | p.LongBinGet:
         memo_index = self.memo_indexes[name]
         return make_get(memo_index)
 
@@ -58,18 +53,18 @@ class Variables:
         return self.ids[varname]
 
 
-class PlaceholderVariables(Variables):
+class PlaceholderVariables:
     # programs should use this guy
-    def assign(self, name: str, id: Optional[str] = None) -> MemoPlaceholder:
+    def assign(self, name: str) -> MemoPlaceholder:
         return MemoPlaceholder(name)
 
-    def __getattr__(self, name: str) -> GetPlaceholder:
+    def __getitem__(self, name: str) -> GetPlaceholder:
         return GetPlaceholder(name)
 
 
 def find_main_pickle(ckpt: str | Any) -> tuple[bytes, bytes, bytes]:
     if isinstance(ckpt, str):
-        model = torch.load(ckpt)
+        model = torch.load(ckpt) # type: ignore
     else:
         model = ckpt
     buf = io.BytesIO()

