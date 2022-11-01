@@ -67,6 +67,8 @@ def postprocess(opcodes: Opcodes) -> Opcodes:
     old_memo_index = 0
     # real_vars.memo_indexes maps both meaningful var names and old memo indexes to new memo indexes
     vars = Variables()
+    frame_lens = []
+    frame_indexes = []
 
     # resolve placeholders
     for i, op in enumerate(placeholders):
@@ -87,7 +89,15 @@ def postprocess(opcodes: Opcodes) -> Opcodes:
         elif isinstance(op, MemoPlaceholder):
             # new variable
             placeholders[i] = vars.assign(op.name)
-
+        elif isinstance(op, p.Frame):
+            op.arg = len(frame_lens) # placeholder pointing at index
+            frame_indexes.append(i)
+            frame_lens.append(0)
+            # the frame data is the length in bytes of following upcode including stop or  up until the next frame
+        if frame_lens:
+            frame_lens[-1] += len(placeholders[i].data)
+    for frame_index in frame_indexes:
+        placeholders[frame_index] = pickle.FRAME + pack("<Q", frame_lens[frame_index])
     result = list(filter(None, placeholders))
     change = len(Pickled(result).dumps) - orig_len
     print(f"removed {removed memos} memos, added {added_memos}. len change: {change}")

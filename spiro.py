@@ -2,14 +2,29 @@
 import io
 import pickle
 import pickletools as pt
+from dataclasses import dataclass
 from struct import pack, unpack
 from typing import Any, Iterable, Optional, TypeVar
 import torch
 from fickling import pickle as p
 from fickling.pickle import Pickled
 
+
+@dataclass
+class GetPlaceholder:
+    name: str | bytes
+    old: Optional[p.Opcode] = None
+
+
+@dataclass
+class MemoPlaceholder:
+    name: str
+
+
 Opcodes = list[p.Opcode]
 T = TypeVar("T")
+Get = p.BinGet | p.LongBinGet
+Placeholder = GetPlaceholder | MemoPlaceholder
 
 
 class Variables:
@@ -34,13 +49,22 @@ class Variables:
     def assign(self, name: str | bytes | int, id: Optional[str] = None) -> p.Memoize:
         return self.add(p.Memoize(), name, id)
 
-    def __getitem__(self, name: str) -> p.BinGet | p.LongBinGet:
+    def __getitem__(self, name: str) -> Get:
         memo_index = self.memo_indexes[name]
         return make_get(memo_index)
 
     # should be used for show in debugger but whatever
     def gloss(self, varname: str) -> str | bytes | int:
         return self.ids[varname]
+
+
+class PlaceholderVariables(Variables):
+    # programs should use this guy
+    def assign(self, name: str, id: Optional[str] = None) -> MemoPlaceholder:
+        return MemoPlaceholder(name)
+
+    def __getattr__(self, name: str) -> GetPlaceholder:
+        return GetPlaceholder(name)
 
 
 def find_main_pickle(ckpt: str | Any) -> tuple[bytes, bytes, bytes]:
