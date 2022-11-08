@@ -18,7 +18,7 @@ def get_most_used(opcodes: list[p.Opcode]) -> dict[bytes, list]:
     return most_used
 
 
-def postprocess(opcodes: list[p.Opcode]) -> p.Pickled:
+def postprocess(opcodes: list[p.Opcode], optimize=True) -> p.Pickled:
     """
     1. memoize strings used more than twice longer than 3 bytes
     2. remove unused memos
@@ -36,7 +36,9 @@ def postprocess(opcodes: list[p.Opcode]) -> p.Pickled:
         i: int, op: p.Opcode
     ) -> Iterator[p.Opcode | GetPlaceholder | MemoPlaceholder]:
         nonlocal added_memos
-        if op.arg in most_used:
+        if not isinstance(op, p.Opcode):
+            yield op
+        elif op.arg in most_used:
             if i == most_used[op.arg][0]:
                 added_memos += 1
                 yield op
@@ -47,8 +49,10 @@ def postprocess(opcodes: list[p.Opcode]) -> p.Pickled:
             yield GetPlaceholder(None, old=op)
         else:
             yield op
-
-    placeholders = [_op for op in enumerate(opcodes) for _op in memoize_op(*op)]
+    if optimize:
+        placeholders = [_op for op in enumerate(opcodes) for _op in memoize_op(*op)]
+    else:
+        placeholders = list(opcodes)
     old_memo_index = 0
     # real_vars.memo_indexes maps both meaningful var names and old memo indexes to new memo indexes
     memos = Variables()
@@ -64,7 +68,7 @@ def postprocess(opcodes: list[p.Opcode]) -> p.Pickled:
                 placeholders[i] = memos[get_index(op.old)]
         elif isinstance(op, p.Memoize):
             # discard unused memos
-            if old_memo_index not in used_memos:
+            if optimize and old_memo_index not in used_memos:
                 placeholders[i] = None
                 removed_memos += 1
             else:
@@ -82,8 +86,9 @@ def postprocess(opcodes: list[p.Opcode]) -> p.Pickled:
         if frame_lens and placeholders[i]:
             frame_lens[-1] += len(getattr(placeholders[i], "data", ""))
     for frame_index, frame_len in zip(frame_indexes, frame_lens):
-        placeholders[frame_index].data = pickle.FRAME + pack("<Q", frame_len)  # type: ignore
+        placeholders[frame_index].data = pickle.FRAME + pack("<Q", frame_len)
     result = p.Pickled(list(filter(None, placeholders)))
+    assert all(isinstance(x, (p.Opcode)) for x in result)
     change = len(result.dumps()) - len(p.Pickled(opcodes).dumps())
     print(f"removed {removed_memos} memos, added {added_memos}. {change} bytes")
     return result

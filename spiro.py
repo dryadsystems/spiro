@@ -15,10 +15,14 @@ class GetPlaceholder:
     name: str | bytes | None
     old: Optional[p.Opcode] = None
 
+    def __post_init__(self) -> None:
+        self.data = self.old.data if self.old else b"hh"
+
 
 @dataclass
 class MemoPlaceholder:
     name: str
+    data = b"\x94" # just for length ocunts
 
 
 Opcodes = list[p.Opcode]
