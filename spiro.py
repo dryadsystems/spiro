@@ -22,7 +22,7 @@ class GetPlaceholder:
 @dataclass
 class MemoPlaceholder:
     name: str
-    data = b"\x94" # just for length ocunts
+    data = b"\x94"  # just for length counts
 
 
 Opcodes = list[p.Opcode]
@@ -68,7 +68,7 @@ class PlaceholderVariables:
 
 def find_main_pickle(ckpt: str | Any) -> tuple[bytes, bytes, bytes]:
     if isinstance(ckpt, str):
-        model = torch.load(ckpt) # type: ignore
+        model = torch.load(ckpt)  # type: ignore
     else:
         model = ckpt
     buf = io.BytesIO()

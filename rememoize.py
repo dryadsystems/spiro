@@ -92,3 +92,15 @@ def postprocess(opcodes: list[p.Opcode], optimize=True) -> p.Pickled:
     change = len(result.dumps()) - len(p.Pickled(opcodes).dumps())
     print(f"removed {removed_memos} memos, added {added_memos}. {change} bytes")
     return result
+
+
+def roundtrip(obj):
+    import spiro
+    first, orig, last = spiro.find_main_pickle(obj)
+    orig_pickle = p.Pickled.load(orig)
+    f = open("/tmp/roundtrip_output", "wb")
+    f.write(first)
+    f.write(postprocess(orig_pickle).dumps())
+    f.write(last)
+    f.close()
+    return torch.load("/tmp/roundtrip_output")
