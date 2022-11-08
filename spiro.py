@@ -106,6 +106,8 @@ def find_main_pickle(ckpt: str | Any) -> tuple[bytes, bytes, bytes]:
     last_bytes = buf.read()
     buf.seek(0)
     first_bytes = buf.read(result_start)
+    buf.seek(0)
+    assert first_bytes + main_bytes + last_bytes == buf.read()
     return (first_bytes, main_bytes, last_bytes)
 
 

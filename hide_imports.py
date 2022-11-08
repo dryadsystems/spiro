@@ -208,8 +208,8 @@ exploit = [
 #         change_frame_len(op, exploit_length)
 #         break
 
-preliminary_result = postprocess(Pickled(vae_pickle[:2] + exploit + vae_pickle[2:]))
-# preliminary_result = postprocess(Pickled(vae_pickle[:-1] + exploit + [p.Stop()]))
+#preliminary_result = postprocess(Pickled(vae_pickle[:2] + exploit + vae_pickle[2:]))
+preliminary_result = postprocess(Pickled(vae_pickle[:-1] + exploit + [p.Stop()]), False)
 # preliminary_result = vae_pickle
 
 # we fucked with data and position, so have fickling re-parse the pickle
@@ -227,6 +227,6 @@ f.close()
 print("loading cool vae")
 # note! this launches doom! and waits for it to exit!
 # doom is poorly behaved and doesn't clean up the screen
+pt.dis(dumped, out=open("vae_dis", "w"))
 cool_model = torch.load(output_path)
 print(cool_model)
-pt.dis(dumped, out=open("vae_dis", "w"))
