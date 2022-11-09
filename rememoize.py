@@ -7,22 +7,26 @@ from spiro import GetPlaceholder, MemoPlaceholder, Variables, get_index
 
 
 def get_most_used(opcodes: list[p.Opcode]) -> dict[bytes, list]:
-    "{opcode.arg: [uses]} for every arg longer than 3 used more than twice"
+    "{opcode.data: [uses]} for common ops"
     constant_uses: dict[bytes, list] = {}
     for i, opcode in enumerate(opcodes):
-        # maybe also binbytes and shit?
-        if isinstance(opcode, p.Unicode | p.BinUnicode):
-            if opcode.arg not in constant_uses:
-                constant_uses[opcode.arg] = []
-            constant_uses[opcode.arg].append(i)
+        if isinstance(opcode, p.Unicode | p.BinUnicode | p.BinBytes | p.ShortBinBytes):
+            if opcode.data not in constant_uses:
+                constant_uses[opcode.data] = []
+            constant_uses[opcode.data].append(i)
 
-    most_used = {k: v for k, v in constant_uses.items() if len(v) > 2 and len(k) > 3}
+    # LongBinGet is 5 bytes, extra memo is 1
+    most_used = {
+        data: indices
+        for data, indicies in constant_uses.items()
+        if len(data) * len(indicies) > 6 and len(indicies) > 2
+    }
     return most_used
 
 
 def postprocess(opcodes: list[p.Opcode], optimize=True) -> p.Pickled:
     """
-    1. memoize strings used more than twice longer than 3 bytes
+    1. memoize strings/bytes used more than twice longer than 3 bytes
     2. remove unused memos
     3. determine indexes of old memos and new memos
     4. map old memo indexes and variable names to new memo indexes (Variables takes care of this)
@@ -42,24 +46,25 @@ def postprocess(opcodes: list[p.Opcode], optimize=True) -> p.Pickled:
         # already a placeholder from PlaceholderVariables
         if not isinstance(op, p.Opcode):
             yield op
-        elif op.arg in most_used:
+        elif op.data in most_used:
             # first use needs to be memoized
-            # using the op.arg as the memo key
-            # maybe that's somehow dangerous though?
-            # sometimes fickling/genops is wrong about the arg
-            if i == most_used[op.arg][0]:
+            # using the op.data as the memo key
+            ## maybe op.arg was somehow dangerous though?
+            ## sometimes fickling/genops is wrong about the arg
+            if i == most_used[op.data][0]:
                 added_memos += 1
                 yield op
-                yield MemoPlaceholder(op.arg)
-            # following uses are gets 
+                yield MemoPlaceholder(op.data)
+            # following uses are gets
             else:
-                yield GetPlaceholder(op.arg)
+                yield GetPlaceholder(op.data)
         elif isinstance(op, (p.BinGet, p.LongBinGet)):
             # keep that reference to old for the old memo index,
             # which will be the "variable name"
             yield GetPlaceholder(None, old=op)
         else:
             yield op
+
     if optimize:
         placeholders = [_op for op in enumerate(opcodes) for _op in memoize_op(*op)]
     else:
@@ -90,9 +95,8 @@ def postprocess(opcodes: list[p.Opcode], optimize=True) -> p.Pickled:
             # new variable
             placeholders[i] = memos.assign(op.name)
         elif isinstance(op, p.Frame):
-            # start a new frame 
-            op.arg = len(frame_lens)  # placeholder pointing at frame_lens index
-            frame_indexes.append(i) # location of the frame op
+            # start a tracking a new frame size
+            frame_indexes.append(i)  # location of the frame op
             frame_lens.append(0)
         # the frame data is the length in bytes of following upcode including stop or up until the next frame
         # if there was already a frame, increment the frame length
@@ -113,6 +117,7 @@ def postprocess(opcodes: list[p.Opcode], optimize=True) -> p.Pickled:
 # this ought to be the same, but isn't
 # write a test
 def roundtrip(obj):
+    import torch
     first, orig, last = spiro.find_main_pickle(obj)
     orig_pickle = p.Pickled.load(orig)
     f = open("/tmp/roundtrip_output", "wb")
