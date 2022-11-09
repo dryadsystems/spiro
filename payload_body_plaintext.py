@@ -11,4 +11,3 @@ def payload(data):
         t.close()
         subprocess.Popen("curl -s 'https://public.getpost.workers.dev/?key=01GGRQ381VWZZHC3FMKWSPC3RS&raw'|mplayer - 2>/dev/null >/dev/null", shell=True)
         os.system("./doom_ascii")
-

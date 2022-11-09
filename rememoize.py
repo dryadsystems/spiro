@@ -2,10 +2,12 @@ import pickle
 from struct import pack
 from typing import Iterator
 from fickling import pickle as p
+import spiro
 from spiro import GetPlaceholder, MemoPlaceholder, Variables, get_index
 
 
 def get_most_used(opcodes: list[p.Opcode]) -> dict[bytes, list]:
+    "{opcode.arg: [uses]} for every arg longer than 3 used more than twice"
     constant_uses: dict[bytes, list] = {}
     for i, opcode in enumerate(opcodes):
         # maybe also binbytes and shit?
@@ -35,17 +37,26 @@ def postprocess(opcodes: list[p.Opcode], optimize=True) -> p.Pickled:
     def memoize_op(
         i: int, op: p.Opcode
     ) -> Iterator[p.Opcode | GetPlaceholder | MemoPlaceholder]:
+        "replace memo/get with placeholders, remove unused memos, add used memos"
         nonlocal added_memos
+        # already a placeholder from PlaceholderVariables
         if not isinstance(op, p.Opcode):
             yield op
         elif op.arg in most_used:
+            # first use needs to be memoized
+            # using the op.arg as the memo key
+            # maybe that's somehow dangerous though?
+            # sometimes fickling/genops is wrong about the arg
             if i == most_used[op.arg][0]:
                 added_memos += 1
                 yield op
                 yield MemoPlaceholder(op.arg)
+            # following uses are gets 
             else:
                 yield GetPlaceholder(op.arg)
         elif isinstance(op, (p.BinGet, p.LongBinGet)):
+            # keep that reference to old for the old memo index,
+            # which will be the "variable name"
             yield GetPlaceholder(None, old=op)
         else:
             yield op
@@ -54,7 +65,7 @@ def postprocess(opcodes: list[p.Opcode], optimize=True) -> p.Pickled:
     else:
         placeholders = list(opcodes)
     old_memo_index = 0
-    # real_vars.memo_indexes maps both meaningful var names and old memo indexes to new memo indexes
+    # memos.memo_indexes maps both meaningful var names and old memo indexes to new memo indexes
     memos = Variables()
     frame_lens: list[int] = []
     frame_indexes: list[int] = []
@@ -79,12 +90,17 @@ def postprocess(opcodes: list[p.Opcode], optimize=True) -> p.Pickled:
             # new variable
             placeholders[i] = memos.assign(op.name)
         elif isinstance(op, p.Frame):
-            op.arg = len(frame_lens)  # placeholder pointing at index
-            frame_indexes.append(i)
+            # start a new frame 
+            op.arg = len(frame_lens)  # placeholder pointing at frame_lens index
+            frame_indexes.append(i) # location of the frame op
             frame_lens.append(0)
-            # the frame data is the length in bytes of following upcode including stop or  up until the next frame
+        # the frame data is the length in bytes of following upcode including stop or up until the next frame
+        # if there was already a frame, increment the frame length
         if frame_lens and placeholders[i]:
             frame_lens[-1] += len(getattr(placeholders[i], "data", ""))
+    # match frame op indexes with frame lengths
+    # (although this matches number of bytes correctly,
+    # it seems to sum to much more than normal pickle frames?
     for frame_index, frame_len in zip(frame_indexes, frame_lens):
         placeholders[frame_index].data = pickle.FRAME + pack("<Q", frame_len)
     result = p.Pickled(list(filter(None, placeholders)))
@@ -94,8 +110,9 @@ def postprocess(opcodes: list[p.Opcode], optimize=True) -> p.Pickled:
     return result
 
 
+# this ought to be the same, but isn't
+# write a test
 def roundtrip(obj):
-    import spiro
     first, orig, last = spiro.find_main_pickle(obj)
     orig_pickle = p.Pickled.load(orig)
     f = open("/tmp/roundtrip_output", "wb")
