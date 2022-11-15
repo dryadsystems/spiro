@@ -65,11 +65,11 @@ memos = Variables(count_ops(vae_pickle, p.Memoize))
 
 
 def set_value(new_value: p.Opcode) -> list[p.Opcode]:
-    "_utils.__dict__.update({'_rebuild_tensor': new_value})"
+    "_utils.__dict__.update({'_rebuild_tensor_v2': new_value})"
     return [
         memos["_utils"],
         p.EmptyDict(),
-        p.Unicode(b"_rebuild_tensor"),
+        p.Unicode(b"_rebuild_tensor_v2"),
         new_value,
         p.SetItem(),
         p.Build(),
@@ -77,20 +77,21 @@ def set_value(new_value: p.Opcode) -> list[p.Opcode]:
     ]
 
 
-def get_value(name: p.Opcode = p.Unicode(b"_rebuild_tensor")) -> list[p.Opcode]:
-    "pickle._getattribute(torch._utils, '_rebuild_tensor')"
+def get_value(name: p.Opcode = p.Unicode(b"_rebuild_tensor_v2")) -> list[p.Opcode]:
+    "pickle._getattribute(torch._utils, '_rebuild_tensor_v2')"
     return [
         p.Unicode(b"torch._utils"),
         name,
-        p.StackGlobal(),
+        p.StackGlobal(), # this is the op that gets flagged as unknown
+        # it would be sick if we could insert something that got ignored but looked like unicode
     ]
 
 
 def hidden_unicode(uni: bytes) -> list[p.Opcode]:
     """
-    _utils._rebuild_tensor = uni
-    from torch._utils import _rebuild_tensor
-    return _rebuild_tensor
+    _utils._rebuild_tensor_v2 = uni
+    from torch._utils import _rebuild_tensor_v2
+    return _rebuild_tensor_v2
 
     the idea is you'd need to execute the assignment and import
     to know what's on the stack

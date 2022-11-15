@@ -66,7 +66,7 @@ class PlaceholderVariables:
         return GetPlaceholder(name)
 
 
-def find_main_pickle(ckpt: str | Any) -> tuple[bytes, bytes, bytes]:
+def find_main_pickle(ckpt: str | Any, magic=False) -> tuple[bytes, bytes, bytes]:
     "get first bytes, result pickle, last bytes from a torch object or ckpt path"
     if isinstance(ckpt, str):
         model = torch.load(ckpt)  # type: ignore
@@ -95,9 +95,10 @@ def find_main_pickle(ckpt: str | Any) -> tuple[bytes, bytes, bytes]:
     # they could be good targets
     # otoh a good scanner would flag any reduce/global here
     devnull = open("/dev/null", "w")
-    pt.dis(buf, devnull)  # magic number
-    pt.dis(buf, devnull)  # protocol version
-    pt.dis(buf, devnull)  # sys info
+    if not magic:
+        pt.dis(buf, devnull)  # magic number
+        pt.dis(buf, devnull)  # protocol version
+        pt.dis(buf, devnull)  # sys info
 
     # figure out where the pickle we want starts/stops
     result_start = buf.tell()
